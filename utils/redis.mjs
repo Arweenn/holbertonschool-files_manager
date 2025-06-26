@@ -1,35 +1,41 @@
 import redis from 'redis';
+import { promisify } from 'util';
 
 class RedisClient {
   constructor() {
     this.client = redis.createClient();
+    this.connected = false;
     
     this.client.on('error', (err) => {
       console.log(`Redis client not connected to the server: ${err}`);
+      this.connected = false;
     });
 
-    this.client.connect().catch((err) => {
-      console.log(`Redis client connection error: ${err}`);
+    this.client.on('ready', () => {
+      this.connected = true;
     });
+
+    this.getAsync = promisify(this.client.get).bind(this.client);
+    this.setexAsync = promisify(this.client.setex).bind(this.client);
+    this.delAsync = promisify(this.client.del).bind(this.client);
   }
 
   isAlive() {
-    return this.client.isReady;
+    return this.connected;
   }
 
   async get(key) {
     try {
-      const value = await this.client.get(key);
+      const value = await this.getAsync(key);
       return value;
     } catch (err) {
-      console.log(`Error getting key ${key}: ${err}`);
       return null;
     }
   }
 
   async set(key, value, duration) {
     try {
-      await this.client.setEx(key, duration, value.toString());
+      await this.setexAsync(key, duration, value.toString());
     } catch (err) {
       console.log(`Error setting key ${key}: ${err}`);
     }
@@ -37,7 +43,7 @@ class RedisClient {
 
   async del(key) {
     try {
-      await this.client.del(key);
+      await this.delAsync(key);
     } catch (err) {
       console.log(`Error deleting key ${key}: ${err}`);
     }
